@@ -1,0 +1,383 @@
+---
+title: "milb_transactions"
+author: "probaseballradar.com"
+date: "3/24/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#milbtran
+library(XML)
+library(RCurl)
+library(rlist)
+library(dplyr)
+library(tidyverse)
+library(DBI)
+library(bigrquery)
+
+td <- Sys.Date()
+yd <- Sys.Date() - 1
+dby <- Sys.Date() - 2
+
+td_url_p1 <- paste0("https://www.milb.com/transactions/",td,"/p-1")
+td_url_p2 <- paste0("https://www.milb.com/transactions/",td,"/p-2")
+td_url_p3 <- paste0("https://www.milb.com/transactions/",td,"/p-3")
+
+yd_url_p1 <- paste0("https://www.milb.com/transactions/",yd,"/p-1")
+yd_url_p2 <- paste0("https://www.milb.com/transactions/",yd,"/p-2")
+yd_url_p3 <- paste0("https://www.milb.com/transactions/",yd,"/p-3")
+
+dby_url_p1 <- paste0("https://www.milb.com/transactions/",dby,"/p-1")
+dby_url_p2 <- paste0("https://www.milb.com/transactions/",dby,"/p-2")
+dby_url_p3 <- paste0("https://www.milb.com/transactions/",dby,"/p-3")
+
+td_tran_p1 <- getURL(td_url_p1,.opts = list(ssl.verifypeer = FALSE))
+td_tran_p1 <- as.data.frame(readHTMLTable(td_tran_p1))
+
+td_tran_p2 <- getURL(td_url_p2,.opts = list(ssl.verifypeer = FALSE))
+td_tran_p2 <- as.data.frame(readHTMLTable(td_tran_p2))
+
+td_tran_p3 <- getURL(td_url_p3,.opts = list(ssl.verifypeer = FALSE))
+td_tran_p3 <- as.data.frame(readHTMLTable(td_tran_p3))
+
+td_tran <-
+if(nrow(td_tran_p3) == 0){
+    Reduce(function(x, y) merge(x, y, all=TRUE), 
+                  list(td_tran_p1, 
+                       td_tran_p2))
+}else{
+    Reduce(function(x, y) merge(x, y, all=TRUE), 
+                  list(td_tran_p1, 
+                       td_tran_p2,
+                       td_tran_p3))
+}
+
+yd_tran_p1 <- getURL(yd_url_p1,.opts = list(ssl.verifypeer = FALSE))
+yd_tran_p1 <- as.data.frame(readHTMLTable(yd_tran_p1))
+
+yd_tran_p2 <- getURL(yd_url_p2,.opts = list(ssl.verifypeer = FALSE))
+yd_tran_p2 <- as.data.frame(readHTMLTable(yd_tran_p2))
+
+yd_tran_p3 <- getURL(yd_url_p3,.opts = list(ssl.verifypeer = FALSE))
+yd_tran_p3 <- as.data.frame(readHTMLTable(yd_tran_p3))
+
+yd_tran <-
+if(nrow(yd_tran_p3) == 0){
+    Reduce(function(x, y) merge(x, y, all=TRUE), 
+                  list(yd_tran_p1, 
+                       yd_tran_p2))
+}else{
+    Reduce(function(x, y) merge(x, y, all=TRUE), 
+                  list(yd_tran_p1, 
+                       yd_tran_p2,
+                       yd_tran_p3))
+}
+
+dby_tran_p1 <- getURL(dby_url_p1,.opts = list(ssl.verifypeer = FALSE))
+dby_tran_p1 <- as.data.frame(readHTMLTable(dby_tran_p1))
+
+dby_tran_p2 <- getURL(dby_url_p2,.opts = list(ssl.verifypeer = FALSE))
+dby_tran_p2 <- as.data.frame(readHTMLTable(dby_tran_p2))
+
+dby_tran_p3 <- getURL(dby_url_p3,.opts = list(ssl.verifypeer = FALSE))
+dby_tran_p3 <- as.data.frame(readHTMLTable(dby_tran_p3))
+
+dby_tran <-
+if(nrow(dby_tran_p3) == 0){
+    Reduce(function(x, y) merge(x, y, all=TRUE), 
+                  list(dby_tran_p1, 
+                       dby_tran_p2))
+}else{
+    Reduce(function(x, y) merge(x, y, all=TRUE), 
+                  list(dby_tran_p1, 
+                       dby_tran_p2,
+                       dby_tran_p3))
+}
+
+milb <- Reduce(function(x, y) merge(x, y, all=TRUE), 
+                  list(td_tran, 
+                       yd_tran,
+                       dby_tran
+                       ))
+
+affiliations <- read.csv("affiliations.csv")
+
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "CF", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "C ", "POS ")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "1B", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "IF ", "POS ")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "2B", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "3B", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "SS", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "LF", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "RF", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "OF", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "RHP", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "LHP", "POS")
+milb$NULL.Transaction <- str_replace(milb$NULL.Transaction, 
+                                          "DH", "POS")
+
+milb$name <- 
+  ifelse(grepl("assigned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?=assigned)"),
+    ifelse(grepl(" elected ", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?=elected)"),       
+  ifelse(grepl("optioned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= to )"),
+  ifelse(grepl("option", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= to )"),
+  ifelse(grepl("Development", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= to )"), 
+ifelse(grepl("transferred", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= from)"),         
+  ifelse(grepl("outright", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?=outright)"),
+  ifelse(grepl("outrighted", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?=outright)"),
+  ifelse(grepl("recalled", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= from)"),
+  ifelse(grepl("selected", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= from)"),       
+  ifelse(grepl("returned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= returned)"),       
+  ifelse(grepl("placed", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= on )"),
+  ifelse(grepl("rehab", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= on )"),       
+  ifelse(grepl("released", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?=.)"),
+    ifelse(grepl("roster status", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?=roster)"),       
+  ifelse(grepl("retired", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?=retired)"),
+  ifelse(grepl("activated", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?= from)"), 
+         "name not found")))))))))))))))))
+
+milb$action <-
+ifelse(grepl("assigned", milb$NULL.Transaction), "assigned",
+ifelse(grepl(" elected ", milb$NULL.Transaction), "elected FA",       
+ifelse(grepl("optioned", milb$NULL.Transaction), "optioned",
+ifelse(grepl("option", milb$NULL.Transaction), "optioned",
+ifelse(grepl("outright", milb$NULL.Transaction), "outrighted",
+ifelse(grepl("outrighted", milb$NULL.Transaction), "outrighted",
+ifelse(grepl("released", milb$NULL.Transaction), "released",
+ifelse(grepl("recalled", milb$NULL.Transaction), "recalled",
+ifelse(grepl("selected", milb$NULL.Transaction), "selected",       
+ifelse(grepl("returned", milb$NULL.Transaction), "returned",
+ifelse(grepl("transferred", milb$NULL.Transaction), "transferred",       
+ifelse(grepl("retired", milb$NULL.Transaction), "retired",  
+ifelse(grepl("activated", milb$NULL.Transaction), "activated", 
+ifelse(grepl("placed", milb$NULL.Transaction), "injured",
+ifelse(grepl("roster status", milb$NULL.Transaction), "status changed", 
+ifelse(grepl("rehab", milb$NULL.Transaction), "rehab",
+"unknown"))))))))))))))))
+
+milb$origin <- 
+ifelse(grepl("assigned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= from ).*(?=.)"), 
+ifelse(grepl("optioned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?= optioned)"), 
+ifelse(grepl("returned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= from ).*(?=.)"),
+ifelse(grepl("recalled", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= from ).*(?=.)"),
+ifelse(grepl("selected", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= from ).*(?=.)"),     
+ifelse(grepl("outright", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?= sent)"),
+ifelse(grepl("Development", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?= transferred)"), 
+ifelse(grepl("transferred", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= from the ).*(?= to the )"),
+ifelse(grepl("activated", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= the ).*(?=.)"),       
+ifelse(grepl("placed", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?= placed)"),
+ifelse(grepl("rehab", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?= sent)"),
+ifelse(grepl("released", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?= released)"),
+ifelse(grepl("retired", milb$NULL.Transaction), "Retirement",
+ifelse(grepl(" elected ", milb$NULL.Transaction), "Elected FA",       
+       "No Team Origin")))))))))))))) 
+
+milb$destination <- 
+ifelse(grepl("assigned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= to ).*(?= from)"), 
+ifelse(grepl("optioned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= to ).*(?=.)"),
+ifelse(grepl("recalled", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?= recalled)"),       
+ifelse(grepl("returned", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= to ).*(?=from)"),
+ifelse(grepl("selected", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?= selected)"),       
+ifelse(grepl("outright", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= to ).*(?=.)"),
+ifelse(grepl("Development", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= the ).*(?=.)"),
+ifelse(grepl("transferred", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= to the ).*(?=.)"),
+ifelse(grepl("placed", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= the ).*(?=.)"),       
+ifelse(grepl("rehab", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= to ).*(?=.)"),
+ifelse(grepl("activated", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = ".*(?=activated)"),
+ifelse(grepl("roster status", milb$NULL.Transaction), str_extract(string = milb$NULL.Transaction, pattern = "(?<= by ).*(?=.)"),        
+ifelse(grepl("released", milb$NULL.Transaction), "MiLB Free Agency",
+ifelse(grepl("retired", milb$NULL.Transaction), "Retirement",
+ifelse(grepl(" elected ", milb$NULL.Transaction), "Elected FA",       
+       "No Team Destination"))))))))))))))) 
+
+milb$name <- 
+  ifelse(is.na(milb$name) == TRUE & milb$action == "activated",
+         str_extract(string = milb$NULL.Transaction, pattern = "(?<=POS).*(?=.)"), milb$name)
+
+milb$destination <- 
+  ifelse(is.na(milb$destination) == TRUE & milb$action == "assigned",
+         str_extract(string = milb$NULL.Transaction, pattern = "(?<= to ).*(?=.)"), milb$destination)
+
+milb$name <- str_trim(milb$name, side = c("both"))
+milb$origin <- str_trim(milb$origin, side = c("both"))
+milb$destination <- str_trim(milb$destination, side = c("both"))
+
+#Joins
+milb <- left_join(milb, affiliations, by = c("origin" = "Team"))
+
+names(milb)[names(milb) == "Level"] <- "OriginLevel"
+names(milb)[names(milb) == "Org"] <- "OriginOrg"
+
+milb$OriginLevel <-
+ifelse(grepl("FCL", milb$origin), "CPX", 
+ifelse(grepl("ACL", milb$origin), "CPX", 
+      milb$OriginLevel))
+
+milb$OriginLevel <-
+ifelse(grepl("DSL", milb$origin), "DSL", 
+      milb$OriginLevel)
+
+milb <- left_join(milb, affiliations, by = c("destination" = "Team"))
+
+names(milb)[names(milb) == "Level"] <- "DestinationLevel"
+names(milb)[names(milb) == "Org"] <- "DestinationOrg"
+
+milb$DestinationLevel <-
+ifelse(grepl("FCL", milb$destination), "CPX",  
+ifelse(grepl("ACL", milb$destination), "CPX",        
+      milb$DestinationLevel))
+
+milb$DestinationLevel <-
+ifelse(grepl("DSL", milb$destination), "DSL",  
+      milb$DestinationLevel)
+
+milb$movement <-
+ifelse(milb$OriginLevel == "MLB" & 
+       milb$DestinationLevel == "AAA", "Demoted",
+ifelse(milb$OriginLevel == "MLB" & 
+       milb$DestinationLevel == "AA", "Demoted",
+ifelse(milb$OriginLevel == "MLB" & 
+       milb$DestinationLevel == "A+", "Demoted",       
+ifelse(milb$OriginLevel == "AAA" & 
+       milb$DestinationLevel == "AA", "Demoted",            
+ifelse(milb$OriginLevel == "AAA" & 
+       milb$DestinationLevel == "A+", "Demoted",
+ifelse(milb$OriginLevel == "AAA" & 
+       milb$DestinationLevel == "A", "Demoted",
+ifelse(milb$OriginLevel == "AAA" & 
+       milb$DestinationLevel == "CPX", "Demoted",        
+ifelse(milb$OriginLevel == "AA" & 
+       milb$DestinationLevel == "A+", "Demoted", 
+ifelse(milb$OriginLevel == "AA" & 
+       milb$DestinationLevel == "A", "Demoted",
+ifelse(milb$OriginLevel == "AA" & 
+       milb$DestinationLevel == "CPX", "Demoted",       
+ifelse(milb$OriginLevel == "A+" & 
+       milb$DestinationLevel == "A", "Demoted",        
+ifelse(milb$OriginLevel == "A+" & 
+       milb$DestinationLevel == "CPX", "Demoted",
+ifelse(milb$OriginLevel == "A" & 
+       milb$DestinationLevel == "CPX", "Demoted", 
+ifelse(milb$OriginLevel == "A" & 
+       milb$DestinationLevel == "DSL", "Demoted",
+ifelse(is.na(milb$OriginLevel) == TRUE | 
+       is.na(milb$DestinationLevel) == TRUE, "Neutral",
+       "Promoted")))))))))))))))
+
+milb$OriginOrg[is.na(milb$OriginOrg)] = 0
+milb$DestinationOrg[is.na(milb$DestinationOrg)] = 0
+
+milb$organization <-
+ifelse(milb$OriginOrg == milb$DestinationOrg, milb$OriginOrg,
+ifelse(milb$OriginOrg == 0 & 
+       milb$DestinationOrg != 0, milb$DestinationOrg,
+ifelse(milb$OriginOrg != 0 & 
+       milb$DestinationOrg == 0, milb$OriginOrg,
+       "Unknown")))
+
+names(milb)[names(milb) == "NULL.Date"] <- "TransactionDate"
+
+milb <- unique(milb)
+milb = subset(milb, select = -c(1,3,8,10))
+
+milb$timestamp <- Sys.time()
+
+bq_conn <- dbConnect(bigquery(),
+project = "baseball-328821",
+dataset = "probaseballradar")
+
+DBI::dbWriteTable(conn = bq_conn,
+                  name = "transactions",
+                  value = milb, 
+                  as_bq_fields(milb),
+                  overwrite = TRUE, 
+                  append = FALSE)
+```
+
+```{r}
+library(pushoverr)
+
+set_pushover_app(token="awhvy1cigbk6667hvp726ua297uw8v") #set_pushover_user(user="gcy4c73aqup9xjjjk3aa4o7uuxqhrz")
+get_pushover_user(ask = is_interactive())
+
+my_user_key = "uyigrw9gkj4mwpdvtntar2823xqn1h"
+#Subscribers Group Key = "gcy4c73aqup9xjjjk3aa4o7uuxqhrz"
+
+PlayerName <- "Jackson Chourio"
+
+milb[milb$name == PlayerName, "action"]
+
+message <- paste0(PlayerName," has been ",milb[milb$name == PlayerName, "movement"]," to ",milb[milb$name == PlayerName, "DestinationLevel"],".")
+
+pushover(
+  message = message,
+  title = "Transaction News",
+  priority = 0,
+  attachment = "C:/Users/Robert/Pictures/pbr_logo.png",
+  user = my_user_key,
+  app = get_pushover_app(),
+  device = "iphone",
+  sound = 'spacealarm',
+  url = "www.probaseballradar.com/baseball-radars/mlb-radar",
+  url_title = NULL,
+  format = c("html", "monospace"),
+  retry = 60,
+  expire = 3600,
+  callback = NULL,
+  timestamp = NULL
+)
+
+#pushoverr::
+```
+
+```{r}
+library(filesstrings)
+
+file.move("C:/Users/Robert/Downloads/fangraphs-minor-league-leaders.csv", "C:/Users/Robert/Documents/FG_Exports")
+
+file.move("C:/Users/Robert/Downloads/fangraphs-minor-league-leaders (1).csv", "C:/Users/Robert/Documents/FG_Exports")
+
+file.rename("C:/Users/Robert/Documents/FG_Exports/fangraphs-minor-league-leaders.csv", paste0("C:/Users/Robert/Documents/FG_Exports/","mh_", Sys.Date(),".csv"))
+
+file.rename("C:/Users/Robert/Documents/FG_Exports/fangraphs-minor-league-leaders (1).csv", paste0("C:/Users/Robert/Documents/FG_Exports/","mp_", Sys.Date(),".csv"))
+
+mh_read_today <- paste0("C:/Users/Robert/Documents/FG_Exports/mh_",Sys.Date(),".csv")
+
+mp_read_today <- paste0("C:/Users/Robert/Documents/FG_Exports/mp_",Sys.Date(),".csv")
+
+mh <- read.csv(mh_read_today)
+
+mp <- read.csv(mp_read_today)
+
+require(googlesheets4)
+
+googlesheets4::sheet_write(mh, 
+                           ss = "https://docs.google.com/spreadsheets/d/1c6_Qmj3YGZxUUR94X1ofkQKqgWSR3S1hRxemAiZj714/edit#gid=1382087600", 
+                           sheet = "MH" )
+
+googlesheets4::sheet_write(mp, 
+                           ss = "https://docs.google.com/spreadsheets/d/1c6_Qmj3YGZxUUR94X1ofkQKqgWSR3S1hRxemAiZj714/edit#gid=1382087600", 
+                           sheet = "MP" )
+```
+
+
+
+
